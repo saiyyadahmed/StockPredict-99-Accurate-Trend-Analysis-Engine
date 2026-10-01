@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GOOG Price Predictor</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--ink:#12151f;--mute:#667085;--line:#e4e7ee;--acc:#4f46e5;--a:#2563eb;--b:#f59e0b;--good:#059669;--bad:#dc2626;--warn:#fef3c7;--warnink:#78350f;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1118;--card:#171b26;--ink:#eef0f6;--mute:#9aa3b5;--line:#272d3d;--acc:#818cf8;--a:#60a5fa;--b:#fbbf24;--good:#34d399;--bad:#f87171;--warn:#3a2f10;--warnink:#fde68a}}
+:root[data-theme="dark"]{--bg:#0e1118;--card:#171b26;--ink:#eef0f6;--mute:#9aa3b5;--line:#272d3d;--acc:#818cf8;--a:#60a5fa;--b:#fbbf24;--good:#34d399;--bad:#f87171;--warn:#3a2f10;--warnink:#fde68a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.6rem;margin:0}.sub{color:var(--mute);margin:2px 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.kpi small{color:var(--mute);display:block}.kpi b{font-size:1.5rem;display:block;margin-top:2px}
+.tag{display:inline-block;font-size:.72rem;padding:2px 8px;border-radius:99px;background:var(--line);color:var(--mute);margin-left:6px;vertical-align:middle}
+.tag.live{background:var(--good);color:#fff}
+.drop{display:block;border:2px dashed var(--line);border-radius:14px;padding:22px;text-align:center;cursor:pointer;color:var(--mute)}
+.drop:hover{border-color:var(--acc);color:var(--ink)}
+.drop input{display:none}
+.drop strong{color:var(--acc)}
+.cmp{width:100%;border-collapse:collapse;font-size:.92rem}
+.cmp th,.cmp td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line)}
+.cmp th:first-child,.cmp td:first-child{text-align:left}
+.cmp th{color:var(--mute);font-weight:500}
+.scroll{overflow-x:auto}
+.warn{background:var(--warn);color:var(--warnink);border-radius:12px;padding:12px 14px;font-size:.92rem}
+.legend{display:flex;gap:16px;font-size:.85rem;color:var(--mute);margin-bottom:6px}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+svg{width:100%;height:auto;display:block}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input[type=number]{padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:150px;font:inherit}
+button{padding:8px 14px;border-radius:10px;border:0;background:var(--acc);color:#fff;font:inherit;cursor:pointer}
+h2{font-size:1.05rem;margin:0 0 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📈 GOOG Price Predictor</h1>
+  <p class="sub">Linear Regression: kal ka Close = f(aaj ka Close) &middot; 80/20 time split</p>
+
+  <div class="grid">
+    <div class="kpi"><small>R² score</small><b id="r2">99.25%</b></div>
+    <div class="kpi"><small>MAE ($)</small><b id="mae">1.58</b></div>
+    <div class="kpi"><small>Rows</small><b id="rows">4,858</b></div>
+    <div class="kpi"><small>Next-day Close</small><b id="next">$132.45</b></div>
+  </div>
+  <p class="sub" style="margin-top:-6px"><span id="src" class="tag">Kaggle notebook run</span></p>
+
+  <label class="drop card" id="dz">
+    <input type="file" id="file" accept=".csv">
+    📂 <strong>GOOG.csv upload karo</strong> (ya drag &amp; drop) &mdash; model yahin browser mein dobara run hoga
+    <div id="msg" style="margin-top:6px"></div>
+  </label>
+
+  <div class="card" id="chartCard" hidden>
+    <h2>Test period: Actual vs Predicted</h2>
+    <div class="legend"><span><i style="background:var(--a)"></i>Actual</span><span><i style="background:var(--b)"></i>Predicted</span></div>
+    <div id="chart"></div>
+  </div>
+
+  <div class="card" id="cmpCard" hidden>
+    <h2>Reality check: model vs naive baseline</h2>
+    <div class="scroll"><table class="cmp">
+      <tr><th></th><th>MAE ($)</th><th>R²</th><th>Direction acc.</th></tr>
+      <tr><td>Linear Regression</td><td id="m1"></td><td id="m2"></td><td id="m3"></td></tr>
+      <tr><td>Naive (kal = aaj)</td><td id="n1"></td><td id="n2"></td><td id="n3">—</td></tr>
+    </table></div>
+    <div class="row" style="margin-top:12px">
+      <span>What-if: aaj ka close $</span><input type="number" id="wi" step="0.01">
+      <button id="wib">Predict</button><b id="wo"></b>
+    </div>
+  </div>
+
+  <div class="warn">
+    <b>99% ka matlab?</b> Ye R² price <i>level</i> par hai, isliye hamesha ooncha aata hai &mdash; kyunki kal ka price aaj ke price ke bahut paas hota hai. Asli test ye hai ki model "kal = aaj" wale naive baseline ko beat karta hai ya nahi, aur direction (up/down) kitni baar sahi hai. File upload karke upar table dekho. Ye trading advice nahi hai.
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>Data preview (notebook se)</h2>
+    <div class="scroll"><table class="cmp">
+      <tr><th>Date</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th></tr>
+      <tr><td>2004-08-19</td><td>2.49</td><td>2.59</td><td>2.39</td><td>2.50</td><td>897,427,216</td></tr>
+      <tr><td>2004-08-20</td><td>2.52</td><td>2.72</td><td>2.50</td><td>2.70</td><td>458,857,488</td></tr>
+      <tr><td>2004-08-23</td><td>2.76</td><td>2.83</td><td>2.72</td><td>2.72</td><td>366,857,939</td></tr>
+      <tr><td>2004-08-24</td><td>2.77</td><td>2.78</td><td>2.58</td><td>2.61</td><td>306,396,159</td></tr>
+      <tr><td>2004-08-25</td><td>2.61</td><td>2.69</td><td>2.59</td><td>2.64</td><td>184,645,512</td></tr>
+    </table></div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const f2=v=>v.toFixed(2);
+let model=null;
+
+function parse(text){
+  const L=text.trim().split(/\r?\n/);
+  const h=L[0].split(',').map(s=>s.replace(/"/g,'').trim().toLowerCase());
+  const di=h.indexOf('date'),ci=h.indexOf('close');
+  if(ci<0)throw new Error('"Close" column nahi mila');
+  const rows=[];
+  for(let i=1;i<L.length;i++){const p=L[i].split(',');const c=parseFloat(p[ci]);if(!isNaN(c))rows.push({d:di>=0?p[di].replace(/"/g,''):String(i),c});}
+  if(rows.length<50)throw new Error('Bahut kam rows');
+  return rows;
+}
+const mae=(y,p)=>y.reduce((s,v,i)=>s+Math.abs(v-p[i]),0)/y.length;
+function r2(y,p){const m=y.reduce((a,b)=>a+b,0)/y.length;let sr=0,st=0;y.forEach((v,i)=>{sr+=(v-p[i])**2;st+=(v-m)**2});return 1-sr/st}
+
+function run(rows){
+  const X=[],Y=[],D=[];
+  for(let i=1;i<rows.length;i++){X.push(rows[i-1].c);Y.push(rows[i].c);D.push(rows[i].d)}
+  const t=Math.floor(X.length*0.8);
+  const mx=X.slice(0,t).reduce((a,b)=>a+b,0)/t,my=Y.slice(0,t).reduce((a,b)=>a+b,0)/t;
+  let sxy=0,sxx=0;for(let i=0;i<t;i++){sxy+=(X[i]-mx)*(Y[i]-my);sxx+=(X[i]-mx)**2}
+  const k=sxy/sxx,b=my-k*mx;
+  const xt=X.slice(t),yt=Y.slice(t),pt=xt.map(v=>k*v+b);
+  let dm=0,dn=0;yt.forEach((v,i)=>{if(Math.sign(pt[i]-xt[i])===Math.sign(v-xt[i]))dm++;});
+  model={k,b};
+  const last=rows[rows.length-1].c;
+  return{n:rows.length,mae:mae(yt,pt),r2:r2(yt,pt),nmae:mae(yt,xt),nr2:r2(yt,xt),dir:dm/yt.length,next:k*last+b,last,yt,pt,dt:D.slice(t)};
+}
+
+function chart(a,p,dates){
+  const W=800,H=280,L=48,R=8,T=10,B=26;
+  const st=Math.max(1,Math.floor(a.length/400)),A=[],P=[],Dt=[];
+  for(let i=0;i<a.length;i+=st){A.push(a[i]);P.push(p[i]);Dt.push(dates[i])}
+  const all=A.concat(P),lo=Math.min(...all),hi=Math.max(...all);
+  const X=i=>L+i*(W-L-R)/(A.length-1),Y=v=>H-B-(v-lo)/(hi-lo)*(H-B-T);
+  const path=arr=>arr.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join('');
+  let g='';
+  for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4,y=Y(v);g+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="var(--mute)">${v.toFixed(0)}</text>`}
+  g+=`<text x="${L}" y="${H-6}" font-size="11" fill="var(--mute)">${Dt[0]}</text><text x="${W-R}" y="${H-6}" text-anchor="end" font-size="11" fill="var(--mute)">${Dt[Dt.length-1]}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}">${g}<path d="${path(A)}" fill="none" stroke="var(--a)" stroke-width="2"/><path d="${path(P)}" fill="none" stroke="var(--b)" stroke-width="2" stroke-dasharray="5 4"/></svg>`;
+}
+
+function show(r){
+  $('r2').textContent=(r.r2*100).toFixed(2)+'%';
+  $('mae').textContent=f2(r.mae);
+  $('rows').textContent=r.n.toLocaleString();
+  $('next').textContent='$'+f2(r.next);
+  $('src').textContent='Live: tumhari file';$('src').className='tag live';
+  $('m1').textContent=f2(r.mae);$('m2').textContent=(r.r2*100).toFixed(2)+'%';$('m3').textContent=(r.dir*100).toFixed(1)+'%';
+  $('n1').textContent=f2(r.nmae);$('n2').textContent=(r.nr2*100).toFixed(2)+'%';
+  $('chart').innerHTML=chart(r.yt,r.pt,r.dt);
+  $('chartCard').hidden=false;$('cmpCard').hidden=false;
+  $('wi').value=f2(r.last);$('wo').textContent='→ $'+f2(r.next);
+  $('msg').textContent='✔ Model run ho gaya ('+r.n.toLocaleString()+' rows)';
+}
+function load(file){
+  if(!file)return;
+  const rd=new FileReader();
+  rd.onload=()=>{try{show(run(parse(rd.result)))}catch(e){$('msg').textContent='❌ '+e.message}};
+  rd.readAsText(file);
+}
+$('file').addEventListener('change',e=>load(e.target.files[0]));
+const dz=$('dz');
+dz.addEventListener('dragover',e=>e.preventDefault());
+dz.addEventListener('drop',e=>{e.preventDefault();load(e.dataTransfer.files[0])});
+$('wib').addEventListener('click',()=>{if(!model)return;const v=parseFloat($('wi').value);if(!isNaN(v))$('wo').textContent='→ $'+f2(model.k*v+model.b)});
+</script>
+</body>
+</html>
