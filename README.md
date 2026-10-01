@@ -24,7 +24,7 @@ The model achieves an outstanding **99.24% R2 Score**, making it highly reliable
 
 ## 🛠️ Tech Stack & Libraries
 - **Language**: Python 3.12
-- **Libraries**: Pandas, NumPy, Scikit-Learn, Matplotlib, XGBoost
+- **Libraries**: Pandas, NumPy, Scikit-Learn, Matplotlib, Linear Regression
 - **Environment**: Kaggle Notebooks / Jupyter
 
 ## 🏃 How to Run the Project
